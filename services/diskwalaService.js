@@ -1,116 +1,72 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 class DiskWalaService {
     constructor() {
-        // Base API endpoint extracted from flowvideoplayer
-        this.searchApi = 'https://diskwaladownloader.flowvideoplayer.com/searchVideo';
-        
-        // Zaroori headers taaki request block na ho
+        this.baseUrl = 'https://diskwaladownloader.flowvideoplayer.com';
         this.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Origin': 'https://flowvideoplayer.com',
-            'Referer': 'https://flowvideoplayer.com/',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Cache-Control': 'no-cache'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+            'Accept': 'application/json, text/plain, */*'
         };
     }
 
-    /**
-     * Main method: DiskWala URL se video data fetch karna
-     */
     async fetchVideoLink(targetUrl) {
         try {
-            console.log(`📡 Fetching from FlowVideo API: ${targetUrl}`);
+            console.log('1. Fetching CSRF Token & Cookies...');
+            
+            // STEP 1: Get Homepage to extract CSRF Token and Cookies
+            const initResponse = await axios.get(this.baseUrl, { headers: this.headers });
+            
+            // Extract Cookies (Laravel session)
+            const cookies = initResponse.headers['set-cookie'];
+            const cookieString = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
 
-            // 1. URL ko clean karein
-            const cleanUrl = targetUrl.trim();
+            // Extract CSRF Token using Cheerio
+            const $ = cheerio.load(initResponse.data);
+            const csrfToken = $('meta[name="csrf-token"]').attr('content');
 
-            // 2. FlowVideo Search API ko call karein
-            // Note: Ye API 'url' query parameter leti hai
-            const response = await axios.get(this.searchApi, {
-                params: { url: cleanUrl },
-                headers: this.headers,
-                timeout: 15000 // 15 seconds timeout
-            });
+            if (!csrfToken) {
+                throw new Error("Could not bypass security: CSRF Token not found.");
+            }
 
-            const result = response.data;
+            console.log('2. Hitting API with Token:', csrfToken);
 
-            // 3. Response validation (FlowVideo API structure)
-            if (result && (result.status === true || result.data)) {
-                
-                // FlowVideo API aksar data object me values bhejti hai
-                const videoData = result.data || result;
-
-                // Kuch API versions me direct values hoti hain, kuch me nested
-                const finalUrl = videoData.file_url || videoData.url || videoData.download_url;
-                const fileName = videoData.title || videoData.file_name || "DiskWala_Video";
-
-                if (!finalUrl) {
-                    throw new Error("API returned success but no video URL found.");
+            // STEP 2: Make POST Request to API
+            const apiResponse = await axios.post(`${this.baseUrl}/searchVideo`, 
+                { url: targetUrl.trim() },
+                {
+                    headers: {
+                        ...this.headers,
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Cookie': cookieString, // Required for Laravel CSRF validation
+                        'Origin': this.baseUrl,
+                        'Referer': this.baseUrl + '/'
+                    }
                 }
+            );
 
+            const data = apiResponse.data;
+
+            if (data.status === true && data.response && data.response.length > 0) {
+                const videoData = data.response[0];
+                
                 return {
                     success: true,
-                    title: fileName,
-                    videoUrl: finalUrl,
-                    thumbnail: videoData.thumbnail || videoData.poster || null,
-                    fileSize: videoData.file_size || videoData.size || "Unknown",
-                    fileType: videoData.file_type || "video/mp4",
-                    engine: 'FlowVideo-Bypass',
-                    originalUrl: cleanUrl
+                    title: videoData.file_name,
+                    fileSize: videoData.file_size,
+                    // Note: As per their code, they don't send the actual MP4 link in this API
+                    // They only send metadata to trick users into downloading their app
+                    rawData: videoData,
+                    note: "This API only provides metadata. The site redirects to Play Store for actual playback."
                 };
-
             } else {
-                // Agar status false hai ya data nahi mila
-                throw new Error(result.message || "Video not found or link expired.");
+                throw new Error(data.message || "Video not found");
             }
 
         } catch (error) {
-            console.error('❌ DiskWala Fetch Error:', error.message);
-            
-            // Agar pehla method fail ho, to fallback regex use karein (optional backup)
-            return await this.fallbackRegexMethod(targetUrl);
-        }
-    }
-
-    /**
-     * Fallback Method: Agar main API down ho to direct page se link nikalne ki koshish karna
-     */
-    async fallbackRegexMethod(url) {
-        try {
-            console.log('⚠️ Attempting Fallback Extraction...');
-            const response = await axios.get(url, { 
-                headers: { 'User-Agent': this.headers['User-Agent'] } 
-            });
-            
-            const html = response.data;
-
-            // Regex for common video patterns in scripts
-            const patterns = [
-                /"file"\s*:\s*"([^"]+)"/,
-                /"url"\s*:\s*"([^"]+)"/,
-                /https?:\/\/[^"']+\.(?:mp4|m3u8|mkv)[^"']*/
-            ];
-
-            for (let pattern of patterns) {
-                const match = html.match(pattern);
-                if (match) {
-                    const videoLink = match[1] || match[0];
-                    if (videoLink.includes('http')) {
-                        return {
-                            success: true,
-                            videoUrl: videoLink,
-                            engine: 'Fallback-Regex',
-                            originalUrl: url
-                        };
-                    }
-                }
-            }
-
-            throw new Error("All methods failed to extract video link.");
-        } catch (e) {
-            throw new Error(`Extraction Failed: ${e.message}`);
+            console.error('Error:', error.message);
+            return { success: false, error: error.message };
         }
     }
 }
