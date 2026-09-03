@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎬 DiskWala Player | Flow Stream</title>
+<link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1179/1179069.png">
+
+<!-- Plyr CSS (Beautiful Player UI) -->
+<link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+
+<!-- HLS.js (For .m3u8 streaming) -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Roboto, sans-serif; }
+  
+  body {
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    min-height: 100vh;
+    color: #fff;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-top: 20px;
+  }
+  
+  .header h1 {
+    font-size: 2.5rem;
+    background: linear-gradient(90deg, #10b981, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  
+  .header p { color: #a0aec0; font-size: 0.9rem; }
+  
+  .container {
+    width: 100%;
+    max-width: 1000px;
+  }
+  
+  .input-box {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  
+  .input-box input {
+    flex: 1;
+    min-width: 250px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    padding: 15px 20px;
+    border-radius: 10px;
+    font-size: 15px;
+    outline: none;
+    transition: 0.3s;
+  }
+  
+  .input-box input:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  }
+  
+  .input-box button {
+    background: linear-gradient(135deg, #10b981, #059669);
+    border: none;
+    color: #fff;
+    padding: 15px 35px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .input-box button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(16, 185, 129, 0.4);
+  }
+  
+  .input-box button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .status {
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    display: none;
+    font-size: 14px;
+  }
+  
+  .status.loading {
+    display: block;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid #3b82f6;
+    color: #93c5fd;
+  }
+  
+  .status.error {
+    display: block;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid #ef4444;
+    color: #fca5a5;
+  }
+  
+  .status.success {
+    display: block;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid #10b981;
+    color: #6ee7b7;
+  }
+  
+  .player-wrapper {
+    background: #000;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    display: none;
+  }
+  
+  .player-wrapper.active { display: block; }
+  
+  .video-info {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 20px;
+    border-radius: 15px;
+    margin-top: 20px;
+    display: none;
+  }
+  
+  .video-info.active { display: block; }
+  
+  .video-info h3 {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+    color: #10b981;
+  }
+  
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+  }
+  
+  .info-item {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 12px 15px;
+    border-radius: 8px;
+    border-left: 3px solid #10b981;
+  }
+  
+  .info-item strong {
+    display: block;
+    color: #a0aec0;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  
+  .info-item span {
+    color: #fff;
+    font-size: 0.9rem;
+    word-break: break-all;
+  }
+  
+  .btn-copy, .btn-download {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid #10b981;
+    color: #10b981;
+    padding: 8px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    margin-right: 8px;
+    text-decoration: none;
+    display: inline-block;
+    transition: 0.3s;
+  }
+  
+  .btn-copy:hover, .btn-download:hover {
+    background: #10b981;
+    color: #fff;
+  }
+  
+  /* Plyr Custom Colors */
+  :root {
+    --plyr-color-main: #10b981;
+    --plyr-video-background: #000;
+  }
+  
+  .loader {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🎬 DiskWala Player</h1>
+  <p>Paste DiskWala link and play instantly</p>
+</div>
+
+<div class="container">
+  
+  <!-- Input Section -->
+  <div class="input-box">
+    <input type="text" id="videoUrl" placeholder="🔗 Paste DiskWala URL here..." 
+      value="https://www.diskwala.com/app/6a99113406ba7ea03dae46ae">
+    <button id="loadBtn" onclick="loadVideo()">
+      <span id="btnText">▶ Play Now</span>
+    </button>
+  </div>
+  
+  <!-- Status Messages -->
+  <div id="status" class="status"></div>
+  
+  <!-- Video Player -->
+  <div class="player-wrapper" id="playerWrapper">
+    <video id="player" playsinline controls crossorigin></video>
+  </div>
+  
+  <!-- Video Info -->
+  <div class="video-info" id="videoInfo">
+    <h3>📋 Video Details</h3>
+    <div class="info-grid" id="infoGrid"></div>
+    <div style="margin-top: 15px;">
+      <button class="btn-copy" onclick="copyLink()">📋 Copy Direct Link</button>
+      <a href="#" id="downloadBtn" class="btn-download" download>⬇️ Download Video</a>
+    </div>
+  </div>
+  
+</div>
+
+<!-- Plyr JS -->
+<script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+
+<script>
+let player = null;
+let currentVideoUrl = '';
+
+// Initialize Plyr
+document.addEventListener('DOMContentLoaded', () => {
+  player = new Plyr('#player', {
+    controls: [
+      'play-large', 'play', 'rewind', 'fast-forward', 'progress',
+      'current-time', 'duration', 'mute', 'volume', 'settings',
+      'pip', 'fullscreen', 'download'
+    ],
+    settings: ['quality', 'speed'],
+    speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
+  });
+});
+
+// Status Message Function
+function showStatus(message, type = 'loading') {
+  const status = document.getElementById('status');
+  status.className = 'status ' + type;
+  status.innerHTML = type === 'loading' 
+    ? `<span class="loader"></span> &nbsp; ${message}` 
+    : message;
+}
+
+function hideStatus() {
+  document.getElementById('status').style.display = 'none';
+}
+
+// Main Load Function
+async function loadVideo() {
+  const url = document.getElementById('videoUrl').value.trim();
+  const btn = document.getElementById('loadBtn');
+  const btnText = document.getElementById('btnText');
+  
+  if (!url) {
+    showStatus('❌ Please enter a DiskWala URL!', 'error');
+    return;
+  }
+  
+  // Reset UI
+  document.getElementById('playerWrapper').classList.remove('active');
+  document.getElementById('videoInfo').classList.remove('active');
+  btn.disabled = true;
+  btnText.innerHTML = '<span class="loader"></span> Loading...';
+  
+  showStatus('🔍 Fetching video link from API...', 'loading');
+  
+  try {
+    // Call your API
+    const response = await fetch(`/api/fetch?url=${encodeURIComponent(url)}`);
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch video');
+    }
+    
+    const videoData = data.data;
+    const videoUrl = videoData.videoUrl;
+    
+    if (!videoUrl) {
+      throw new Error('No video URL found in response');
+    }
+    
+    currentVideoUrl = videoUrl;
+    showStatus('✅ Video loaded! Playing now...', 'success');
+    
+    // Play Video (Auto-detect HLS or MP4)
+    playVideo(videoUrl);
+    
+    // Show Info
+    showVideoInfo(videoData);
+    
+    setTimeout(hideStatus, 3000);
+    
+  } catch (error) {
+    console.error(error);
+    showStatus('❌ Error: ' + error.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btnText.innerHTML = '▶ Play Now';
+  }
+}
+
+// Play Video (Supports HLS + MP4)
+function playVideo(videoUrl) {
+  const video = document.getElementById('player');
+  document.getElementById('playerWrapper').classList.add('active');
+  
+  // Check if HLS Stream (.m3u8)
+  if (videoUrl.includes('.m3u8')) {
+    if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(videoUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play();
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // For Safari
+      video.src = videoUrl;
+      video.addEventListener('loadedmetadata', () => video.play());
+    }
+  } else {
+    // MP4 / Direct video file
+    video.src = videoUrl;
+    video.load();
+    video.play().catch(e => console.log('Auto-play blocked:', e));
+  }
+}
+
+// Show Video Details
+function showVideoInfo(data) {
+  const info = document.getElementById('videoInfo');
+  const grid = document.getElementById('infoGrid');
+  
+  const items = [
+    { label: 'Title', value: data.title || 'Unknown' },
+    { label: 'File Size', value: data.fileSize || 'N/A' },
+    { label: 'Format', value: data.fileType || (data.videoUrl.includes('m3u8') ? 'HLS Stream' : 'MP4') },
+    { label: 'Method', value: data.method || data.engine || 'API' },
+  ];
+  
+  grid.innerHTML = items.map(item => `
+    <div class="info-item">
+      <strong>${item.label}</strong>
+      <span>${item.value}</span>
+    </div>
+  `).join('');
+  
+  // Set Download Link
+  document.getElementById('downloadBtn').href = data.videoUrl;
+  
+  info.classList.add('active');
+}
+
+// Copy Link Function
+function copyLink() {
+  if (!currentVideoUrl) return;
+  navigator.clipboard.writeText(currentVideoUrl).then(() => {
+    showStatus('✅ Link copied to clipboard!', 'success');
+    setTimeout(hideStatus, 2000);
+  });
+}
+
+// Enter Key Support
+document.getElementById('videoUrl').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') loadVideo();
+});
+</script>
+
+</body>
+</html>
