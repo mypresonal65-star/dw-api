@@ -5,6 +5,7 @@ const videoRoutes = require('./routes/video');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const path = require('path');
 
 // Middleware
 app.use(cors());
@@ -47,4 +48,11 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📡 API endpoint: http://localhost:${PORT}/api/fetch?url=YOUR_DISKWALA_URL`);
+});
+// Static files serve karne ke liye (Player HTML ke liye)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Player Route
+app.get('/player', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'player.html'));
 });
